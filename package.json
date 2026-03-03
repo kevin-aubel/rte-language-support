@@ -1,7 +1,7 @@
 {
   "name": "rte-language",
   "publisher": "kevin-aubel",
-  "displayName": "RTE Language Support",
+  "displayName": "Generix RTE Language Support",
   "description": "Syntax highlighting and language support for Generix RTE (.rte, .inc) files",
   "version": "1.0.0",
   "license": "MIT",
