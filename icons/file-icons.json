@@ -1,0 +1,11 @@
+{
+  "iconDefinitions": {
+    "_rte_file": {
+      "iconPath": "./gear.svg"
+    }
+  },
+  "fileExtensions": {
+    "rte": "_rte_file",
+    "inc": "_rte_file"
+  }
+}

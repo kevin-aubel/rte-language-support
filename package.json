@@ -1,0 +1,61 @@
+{
+  "name": "rte-language",
+  "publisher": "kevin-aubel",
+  "displayName": "RTE Language Support",
+  "description": "Syntax highlighting and language support for Generix RTE (.rte, .inc) files",
+  "version": "1.0.0",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/kevin-aubel/rte-language-support"
+  },
+  "bugs": {
+    "url": "https://github.com/kevin-aubel/rte-language-support/issues"
+  },
+  "homepage": "https://github.com/kevin-aubel/rte-language-support#readme",
+  "engines": {
+    "vscode": "^1.74.0"
+  },
+  "categories": [
+    "Programming Languages"
+  ],
+  "keywords": [
+    "rte",
+    "generix",
+    "syntax highlighting",
+    "rule translation engine"
+  ],
+  "galleryBanner": {
+    "color": "#0078d4",
+    "theme": "dark"
+  },
+  "main": "./extension.js",
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "contributes": {
+    "languages": [
+      {
+        "id": "rte",
+        "aliases": ["RTE", "rte"],
+        "extensions": [".rte", ".inc"],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "rte",
+        "scopeName": "source.rte",
+        "path": "./syntaxes/rte.tmLanguage.json"
+      }
+    ]
+  },
+  "scripts": {
+    "package": "vsce package",
+    "publish": "vsce publish"
+  },
+  "author": "Generix Group",
+  "devDependencies": {
+    "@vscode/vsce": "^3.0.0"
+  }
+}

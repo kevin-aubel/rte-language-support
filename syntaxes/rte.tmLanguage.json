@@ -1,0 +1,170 @@
+{
+  "name": "RTE",
+  "scopeName": "source.rte",
+  "fileTypes": ["rte", "inc"],
+  "patterns": [
+    { "include": "#comments" },
+    { "include": "#preprocessor" },
+    { "include": "#strings" },
+    { "include": "#constants" },
+    { "include": "#keywords" },
+    { "include": "#nodes" },
+    { "include": "#functions" },
+    { "include": "#params" },
+    { "include": "#numbers" },
+    { "include": "#operators" }
+  ],
+  "repository": {
+
+    "comments": {
+      "patterns": [
+        {
+          "name": "comment.line.exclamation.rte",
+          "match": "!.*$"
+        },
+        {
+          "name": "comment.line.percent.rte",
+          "match": "%.*$"
+        }
+      ]
+    },
+
+    "preprocessor": {
+      "patterns": [
+        {
+          "name": "meta.preprocessor.rte",
+          "match": "(#define|#include)\\s+(\\S+)(.*)?$",
+          "captures": {
+            "1": { "name": "keyword.control.preprocessor.rte" },
+            "2": { "name": "entity.name.function.preprocessor.rte" },
+            "3": { "name": "string.preprocessor.rte" }
+          }
+        }
+      ]
+    },
+
+    "strings": {
+      "name": "string.quoted.double.rte",
+      "begin": "\"",
+      "end": "\"",
+      "patterns": [
+        { "name": "constant.character.escape.rte", "match": "\\\\." }
+      ]
+    },
+
+    "constants": {
+      "name": "constant.language.rte",
+      "match": "\\b(TRUE|FALSE|EMPTY|NL|EOL|MESSAGE_OUT)\\b"
+    },
+
+    "keywords": {
+      "patterns": [
+        {
+          "comment": "Block delimiters",
+          "name": "keyword.control.block.rte",
+          "match": "\\b(begin|endbegin|endend|endnodein|endnodeout|endline|enddefault|endfunction|endwhile|endswitch|endif)\\b"
+        },
+        {
+          "comment": "Main blocks",
+          "name": "keyword.control.rte",
+          "match": "\\b(end|nodein|nodeout|default|function|schema|message|base|receiving|building|validating|cloning)\\b"
+        },
+        {
+          "comment": "Flow control",
+          "name": "keyword.control.flow.rte",
+          "match": "\\b(if|then|else|elseif|while|do|switch|case|default|return|break|in)\\b"
+        },
+        {
+          "comment": "line handler",
+          "name": "keyword.control.line.rte",
+          "match": "\\bline\\b"
+        },
+        {
+          "comment": "Logical operators",
+          "name": "keyword.operator.logical.rte",
+          "match": "\\b(and|or|not)\\b"
+        }
+      ]
+    },
+
+    "nodes": {
+      "comment": "XML node identifiers gG... eE... eA... sS...",
+      "patterns": [
+        {
+          "name": "entity.name.tag.group.rte",
+          "match": "\\b(gG[\\w:]+)\\b"
+        },
+        {
+          "name": "variable.other.element.rte",
+          "match": "\\b(eE[\\w:]+|eA[\\w:]+)\\b"
+        },
+        {
+          "name": "entity.name.tag.segment.rte",
+          "match": "\\b(S[A-Z][\\w:]+)\\b"
+        }
+      ]
+    },
+
+    "functions": {
+      "comment": "Built-in functions and user functions",
+      "patterns": [
+        {
+          "name": "support.function.builtin.rte",
+          "match": "\\b(build|length|substr|index|replace|toupper|tolower|peel|split|pick|time|copy|remove|read|close|base64encode|base64decode|print|valid|log|LOG|ERREUR|edierrordump|addDocumentError|attachDocumentFile|loadjson|find|sendGisEmissionMessage|sendKsefInvoiceMessage|bfEXIT)\\b"
+        },
+        {
+          "name": "support.function.lib.rte",
+          "match": "\\b(bfBEGIN|bfEND|bfEXIT)\\b"
+        },
+        {
+          "name": "entity.name.function.user.rte",
+          "match": "\\b(bf[A-Z][\\w]+|tf[A-Z][\\w]+|nf[A-Z][\\w]+)(?=\\s*\\()"
+        }
+      ]
+    },
+
+    "params": {
+      "comment": "Document parameters pXXX and pDOC.XXX",
+      "patterns": [
+        {
+          "name": "variable.other.param.doc.rte",
+          "match": "\\b(pDOC|pDOF|pEDISEND|pMESSAGE|pREST_TRIGGER)\\.[\\w.]+"
+        },
+        {
+          "name": "variable.other.param.rte",
+          "match": "\\bp[A-Z][A-Z_0-9]+"
+        },
+        {
+          "name": "variable.other.counter.rte",
+          "match": "\\bcCount[\\w:]+"
+        }
+      ]
+    },
+
+    "numbers": {
+      "name": "constant.numeric.rte",
+      "match": "\\b([0-9]+(\\.[0-9]+)?)\\b"
+    },
+
+    "operators": {
+      "patterns": [
+        {
+          "name": "keyword.operator.assignment.rte",
+          "match": ":="
+        },
+        {
+          "name": "keyword.operator.comparison.rte",
+          "match": "<>|<=|>=|<|>"
+        },
+        {
+          "name": "keyword.operator.increment.rte",
+          "match": "\\+\\+|--"
+        },
+        {
+          "name": "keyword.operator.redirect.rte",
+          "match": ">>"
+        }
+      ]
+    }
+  }
+}
