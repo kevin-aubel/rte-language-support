@@ -1,20 +1,581 @@
 const vscode = require('vscode');
 
-/**
- * Injecte automatiquement les icônes engrenage pour les fichiers .rte et .inc
- * dans Material Icon Theme (si installé et actif).
- * @param {vscode.ExtensionContext} context
- */
+// ══════════════════════════════════════════════════════════════════════════════
+// BASE DE DONNÉES HOVER — mots-clés, fonctions, constantes
+// ══════════════════════════════════════════════════════════════════════════════
+
+const HOVER_DATA = {
+
+  // ── Blocs structurels ──────────────────────────────────────────────────────
+
+  begin: {
+    label: 'begin … endbegin',
+    doc: `**Bloc d'initialisation** — Exécuté **une seule fois** au démarrage du RTE, avant toute lecture du message.\n\nUtilisé pour initialiser les variables et déclarer des valeurs par défaut.\n\n> ⚠️ La **première instruction** doit toujours être \`bfBEGIN()\`.\n\n\`\`\`rte\nbegin\n    bfBEGIN()\n    tMode := "SENDING"\n    nCpt  := 0\n    bOK   := TRUE\nendbegin\n\`\`\``
+  },
+  endbegin: {
+    label: 'endbegin',
+    doc: 'Ferme le bloc **begin**.'
+  },
+
+  end: {
+    label: 'end … endend',
+    doc: `**Bloc de finalisation** — Exécuté **une seule fois** à la fin du RTE, après traitement complet du message.\n\nContient les traitements finaux : impression du message de sortie, logs de synthèse, gestion des erreurs.\n\n> ⚠️ La **dernière instruction** doit toujours être \`bfEND()\`.\n\n\`\`\`rte\nend\n    if valid(MESSAGE_OUT) then\n        print(MESSAGE_OUT)\n    else\n        edierrordump(MESSAGE_OUT)\n        bfEXIT(1)\n    endif\n    bfEND()\nendend\n\`\`\``
+  },
+  endend: {
+    label: 'endend',
+    doc: 'Ferme le bloc **end**.'
+  },
+
+  nodein: {
+    label: 'nodein SSegment gGGroupe1, gGGroupe2, … endnodein',
+    doc: `**Bloc de lecture XML** — Déclenché à chaque fois que le parseur XML atteint le nœud correspondant au chemin décrit.\n\nLe **premier argument** est le segment cible (\`S...\`), les arguments suivants sont les groupes parents (chemin XPath implicite, du plus général au plus spécifique).\n\nDans ce bloc on peut lire :\n- \`eEMonElement\` → **contenu texte** de l'élément XML\n- \`eAmonAttribut\` → valeur d'un **attribut** XML\n\n\`\`\`rte\nnodein SInvoiceNumber gGInvoice, gGInvoiceHeader, gGInvoiceNumber\n    tNumFact := eEInvoiceNumber\nendnodein\n\`\`\``
+  },
+  endnodein: {
+    label: 'endnodein',
+    doc: 'Ferme le bloc **nodein**.'
+  },
+
+  nodeout: {
+    label: 'nodeout SSegment gGGroupe1, … endnodeout',
+    doc: `**Bloc d'écriture XML** — Construit un nœud dans le message de sortie (\`MESSAGE_OUT\`).\n\nOn assigne les valeurs via :\n- \`eEMonElement := valeur\` → contenu texte\n- \`eAmonAttribut := valeur\` → attribut XML\n\n\`\`\`rte\nnodeout SApplicationResponseTypeCoded gGApplicationResponse, gGApplicationResponseHeader\n    eEApplicationResponseTypeCoded := "Error"\nendnodeout\n\`\`\`\n\nValider et imprimer en fin de traitement :\n\`\`\`rte\nif valid(MESSAGE_OUT) then\n    print(MESSAGE_OUT)\nelse\n    edierrordump(MESSAGE_OUT)\n    bfEXIT(1)\nendif\n\`\`\``
+  },
+  endnodeout: {
+    label: 'endnodeout',
+    doc: 'Ferme le bloc **nodeout**.'
+  },
+
+  line: {
+    label: 'line("motif") … endline',
+    doc: `**Bloc de traitement ligne** — Déclenché si la ligne courante du fichier d'entrée **contient le motif** spécifié.\n\nUtile pour traiter des fichiers non-XML (CSV, EDI, texte brut…).\n\nVariantes :\n- \`line("motif")\` → ligne **contient** le motif\n- \`line(1:"motif")\` → motif en **début** de ligne (position 1)\n- \`line(tVar)\` → motif stocké dans une variable\n\n\`\`\`rte\nline("<Invoice xmlns")\n    tLine := pick(1, 1, EOL)\n    nCpt++\nendline\n\`\`\``
+  },
+  endline: {
+    label: 'endline',
+    doc: 'Ferme le bloc **line**.'
+  },
+
+  default: {
+    label: 'default … enddefault',
+    doc: `**Bloc par défaut ligne** — Traite toutes les lignes **non matchées** par les blocs \`line\`.\n\nAnalogue au \`default\` d'un switch, mais pour les lignes du fichier d'entrée.\n\n\`\`\`rte\ndefault\n    nCpt++\n    taLine[nCpt] := pick(1, 1, EOL)\nenddefault\n\`\`\``
+  },
+  enddefault: {
+    label: 'enddefault',
+    doc: 'Ferme le bloc **default**.'
+  },
+
+  function: {
+    label: 'function nom(params) … endfunction',
+    doc: `**Déclaration de fonction utilisateur**.\n\nConventions de nommage obligatoires :\n- \`bf...\` → retourne un **booléen** (TRUE/FALSE)\n- \`tf...\` → retourne un **texte**\n- \`nf...\` → retourne un **numérique**\n\nLes fonctions se déclarent **après** le bloc \`end … endend\`.\n\n\`\`\`rte\nfunction bfSearchIn(tString, tSearch)\n    nSearch := index(tString, tSearch)\n    if nSearch = 0 then\n        return FALSE\n    endif\n    return TRUE\nendfunction\n\`\`\``
+  },
+  endfunction: {
+    label: 'endfunction',
+    doc: 'Ferme le bloc **function**.'
+  },
+
+  schema: {
+    label: 'schema "chemin.xsd" [validating,] receiving|building',
+    doc: `**Déclaration de schéma XSD** — Associe un fichier XSD au message entrant ou sortant pour validation et parsage.\n\nModes (combinables) :\n- \`receiving\` → message **entrant** (lu depuis l'input)\n- \`building\` → message **sortant** (construit via \`nodeout\`)\n- \`validating\` → active la **validation XSD** stricte\n\n\`\`\`rte\nschema "xcbl/v4_0/financial/v1_0/financial.xsd" validating, receiving\nschema "xcbl/v4_0/messagemanagement/v1_0/messagemanagement.xsd" validating, building\n\`\`\``
+  },
+
+  message: {
+    label: 'message "chemin.xsd" cloning',
+    doc: `**Passage du message sans transformation** — Le message entrant est transmis tel quel en sortie.\n\nUtilisé quand le RTE effectue uniquement des contrôles ou des paramétrages, sans modifier le XML.\n\n\`\`\`rte\nmessage "xcbl/v4_0/financial/v1_0/financial.xsd" cloning\n\`\`\``
+  },
+
+  base: {
+    label: 'base "fichier.cfg" ALIAS',
+    doc: `**Déclaration d'une base de paramétrage** — Donne accès à un fichier de configuration Generix via la fonction \`find()\`.\n\nL'\`ALIAS\` est utilisé comme premier argument dans \`find()\`.\n\n\`\`\`rte\nbase "pdp_setting.cfg" PS\n! ...\ntEndpoint := find(PS, TYPE="INVOICE", COUNTRY="FR", URL)\n\`\`\``
+  },
+
+  receiving: {
+    label: 'receiving',
+    doc: 'Modificateur de `schema` — indique que ce schéma décrit le message **entrant** (lecture/parsing XML).'
+  },
+  building: {
+    label: 'building',
+    doc: 'Modificateur de `schema` — indique que ce schéma décrit le message **sortant** (construction via `nodeout`).'
+  },
+  validating: {
+    label: 'validating',
+    doc: 'Modificateur de `schema` — active la **validation XSD** du message contre le schéma déclaré. Une erreur de validation provoque un arrêt du traitement.'
+  },
+  cloning: {
+    label: 'cloning',
+    doc: 'Modificateur de `message` — le message entrant est **cloné tel quel** en sortie, sans aucune transformation XML.'
+  },
+
+  // ── Contrôle de flux ───────────────────────────────────────────────────────
+
+  if: {
+    label: 'if (condition) then … [elseif …] [else …] endif',
+    doc: `**Condition** — Structure if/elseif/else/endif.\n\nOpérateurs de comparaison : \`=\`, \`<>\`, \`<\`, \`>\`, \`<=\`, \`>=\`\nOpérateurs logiques : \`and\`, \`or\`, \`not\`\n\n\`\`\`rte\nif (nError <> 0) then\n    LOG("Statut", "ERREUR")\nelseif (tFlag = "warn") then\n    LOG("Statut", "WARN")\nelse\n    LOG("Statut", "OK")\nendif\n\`\`\``
+  },
+  then: {
+    label: 'then',
+    doc: 'Introduit le corps d\'une condition `if (…) then` ou d\'une boucle `while TRUE then`.'
+  },
+  else: {
+    label: 'else',
+    doc: 'Branche **alternative** d\'un `if` — exécutée si aucune condition précédente n\'est vraie.'
+  },
+  elseif: {
+    label: 'elseif (condition) then',
+    doc: 'Condition **alternative** dans un bloc `if`. Permet d\'enchaîner plusieurs conditions sans imbriquer des `if`.'
+  },
+  endif: {
+    label: 'endif',
+    doc: 'Ferme un bloc **if**.'
+  },
+
+  while: {
+    label: 'while (condition) do … endwhile',
+    doc: `**Boucle while** — Trois formes disponibles :\n\n**1. Condition numérique / booléenne :**\n\`\`\`rte\nwhile (nI < nMax) do\n    nI++\nendwhile\n\`\`\`\n\n**2. Itération sur tableau :**\n\`\`\`rte\nwhile tIdx in taMonTableau do\n    log(taMonTableau[tIdx], NL)\nendwhile\n\`\`\`\n\n**3. Boucle infinie avec \`break\` :**\n\`\`\`rte\nwhile TRUE then\n    if nPos = 0 then\n        break\n    endif\nendwhile\n\`\`\``
+  },
+  do: {
+    label: 'do',
+    doc: 'Introduit le corps d\'une boucle **while (condition) do**.'
+  },
+  endwhile: {
+    label: 'endwhile',
+    doc: 'Ferme le bloc **while**.'
+  },
+
+  switch: {
+    label: 'switch (variable) … endswitch',
+    doc: `**Switch/case** — Sélection par valeur de variable.\n\nSupporte le **fall-through** : un \`case\` sans instructions tombe dans le \`case\` suivant.\n\n\`\`\`rte\nswitch (pDOC.TRANSLATOR)\n    case "CII" :\n        pTYPE := "{'kind':'INVOIC','norm':'CII'}"\n    case "UBL_INVOICE" :\n    case "UBL_CREDITNOTE" :           ! fall-through\n        pTYPE := "{'kind':'INVOIC','norm':'UBL 2.1'}"\n    default :\n        pTYPE := build("{'kind':'INVOIC','norm':'", pDOC.TRANSLATOR, "'")\nendswitch\n\`\`\``
+  },
+  case: {
+    label: 'case "valeur" :',
+    doc: 'Branche d\'un **switch**. Un `case` vide sans instructions tombe dans le `case` suivant (**fall-through**).'
+  },
+  endswitch: {
+    label: 'endswitch',
+    doc: 'Ferme le bloc **switch**.'
+  },
+
+  return: {
+    label: 'return valeur',
+    doc: '**Retourne une valeur** depuis une fonction utilisateur et stoppe immédiatement son exécution.'
+  },
+  break: {
+    label: 'break',
+    doc: '**Interrompt** une boucle `while` ou sort d\'un `case` dans un `switch`.'
+  },
+  in: {
+    label: 'in',
+    doc: 'Opérateur d\'**itération sur tableau** dans `while tIdx in taTableau do` — parcourt toutes les clés du tableau.'
+  },
+  and: {
+    label: 'and',
+    doc: 'Opérateur logique **ET** — `(condA and condB)` est vrai si les deux conditions sont vraies.'
+  },
+  or: {
+    label: 'or',
+    doc: 'Opérateur logique **OU** — `(condA or condB)` est vrai si au moins une condition est vraie.'
+  },
+  not: {
+    label: 'not',
+    doc: 'Opérateur logique **NON** — `not (cond)` inverse la valeur booléenne de la condition.'
+  },
+
+  // ── Préprocesseur ──────────────────────────────────────────────────────────
+
+  '#define': {
+    label: '#define NOM "valeur"',
+    doc: `**Directive de préprocesseur** — Définit une constante textuelle substituée à la compilation (avant exécution).\n\nUtilisé pour les métadonnées standard du fichier :\n\`\`\`rte\n#define PROG_NAME "MON_RTE"\n#define PROG_VER  "1.0"\n#define PROG_DATE "09/03/2026"\n#define PROG_INFO build(PROG_NAME," v",PROG_VER," du ",PROG_DATE)\n\`\`\``
+  },
+  '#include': {
+    label: '#include "fichier.inc"',
+    doc: `**Inclusion de fichier** — Insère le contenu d'un fichier \`.inc\` (bibliothèque partagée) au point d'inclusion, avant compilation.\n\nToujours inclure la bibliothèque standard Generix :\n\`\`\`rte\n#include "generix_fct_V1_3.inc"\n#include "mes_fonctions_communes.inc"\n\`\`\``
+  },
+
+  // ── Constantes ─────────────────────────────────────────────────────────────
+
+  TRUE: {
+    label: 'TRUE — constante booléenne',
+    doc: '**Valeur booléenne vraie**. Utilisé pour initialiser des variables `b...` ou dans des conditions.\n\n```rte\nbOK := TRUE\nwhile TRUE then  ! boucle infinie\n```'
+  },
+  FALSE: {
+    label: 'FALSE — constante booléenne',
+    doc: '**Valeur booléenne fausse**. Utilisé pour initialiser des variables `b...` ou annuler un flag.\n\n```rte\nbErreur := FALSE\nif bErreur = FALSE then\n```'
+  },
+  EMPTY: {
+    label: 'EMPTY — valeur vide',
+    doc: '**Valeur vide** — Représente une chaîne vide (`""`) ou zéro selon le contexte.\n\nUtilisé pour réinitialiser une variable ou comme second argument de `ERREUR()` quand il n\'y a pas de valeur à afficher.\n\n```rte\ntBuffer := EMPTY\nERREUR("Champ manquant", EMPTY)\n```'
+  },
+  NL: {
+    label: 'NL — retour à la ligne (\\n)',
+    doc: '**Caractère de retour à la ligne** (`\\n`).\n\nUtilisé dans `print()`, `log()`, `peel()` pour gérer les fins de ligne.\n\n```rte\nprint("Traitement terminé", NL)\ntPropre := peel(tLine, NL)  ! supprime le \\n en bout de ligne\n```'
+  },
+  EOL: {
+    label: 'EOL — fin de ligne (marqueur de fin)',
+    doc: '**Marqueur de fin de ligne** — Utilisé dans `pick()` et `substr()` pour indiquer "jusqu\'à la fin".\n\n```rte\ntLine   := pick(1, 1, EOL)     ! lit toute la ligne courante\ntReste  := substr(tVal, 5, EOL) ! extrait du 5e caractère à la fin\n```'
+  },
+  MESSAGE_OUT: {
+    label: 'MESSAGE_OUT — message XML de sortie',
+    doc: '**Référence au message XML de sortie** — Construit progressivement par les blocs `nodeout`.\n\nDoit être validé avant impression :\n\n```rte\nif valid(MESSAGE_OUT) then\n    print(MESSAGE_OUT)\nelse\n    edierrordump(MESSAGE_OUT)\n    bfEXIT(1)\nendif\n```'
+  },
+
+  // ── Fonctions built-in ─────────────────────────────────────────────────────
+
+  build: {
+    label: 'build(a, b, c, …) → texte',
+    doc: `**Concatène** plusieurs valeurs (texte, numérique, variable, constante) en une seule chaîne.\n\nC'est la fonction de concaténation principale en RTE — il n'y a pas d'opérateur \`+\` pour les chaînes.\n\n\`\`\`rte\ntMsg  := build("Facture n°", tNumFact, " du ", tDate)\nLOG("Info", build("Traité : ", nCpt, " lignes"))\n\`\`\``
+  },
+  length: {
+    label: 'length(texte) → numérique',
+    doc: `**Retourne la longueur** d'une chaîne de caractères. Retourne \`0\` si la chaîne est vide.\n\n\`\`\`rte\nnLen := length(tNom)\nif nLen = 0 then\n    ERREUR("Nom vide", EMPTY)\nendif\n\`\`\``
+  },
+  substr: {
+    label: 'substr(texte, début, fin) → texte',
+    doc: `**Extrait une sous-chaîne** (indices **1-based**).\n\nUtiliser \`EOL\` comme borne de fin pour extraire jusqu'à la fin de la chaîne.\n\n\`\`\`rte\ntAnnee  := substr(tDate, 1, 4)    ! "2026" depuis "2026-03-09"\ntMois   := substr(tDate, 6, 7)    ! "03"\ntReste  := substr(tDate, 6, EOL)  ! "03-09" (du 6e à la fin)\n\`\`\``
+  },
+  index: {
+    label: 'index(texte, recherche) → numérique',
+    doc: `**Retourne la position** (1-based) de la première occurrence de \`recherche\` dans \`texte\`.\n\nRetourne **0** si absent — à tester avant tout \`substr()\`.\n\n\`\`\`rte\nnPos := index(tLine, "<Invoice")\nif nPos = 0 then\n    ! "<Invoice" non trouvé dans tLine\nendif\n\`\`\``
+  },
+  replace: {
+    label: 'replace(texte, ancien, nouveau) → texte',
+    doc: `**Remplace** toutes les occurrences de \`ancien\` par \`nouveau\` dans \`texte\`.\n\n\`\`\`rte\ntMontant := replace(tMontantBrut, ",", ".")  ! virgule → point décimal\ntNoPunct  := replace(tSiret, " ", EMPTY)     ! supprime les espaces\n\`\`\``
+  },
+  toupper: {
+    label: 'toupper(texte) → texte',
+    doc: `Convertit une chaîne en **MAJUSCULES**.\n\n\`\`\`rte\ntCode := toupper(tCodeBrut)  ! "fr" → "FR"\n\`\`\``
+  },
+  tolower: {
+    label: 'tolower(texte) → texte',
+    doc: `Convertit une chaîne en **minuscules**.\n\n\`\`\`rte\ntFormat := tolower(pDOC.TRANSLATOR)  ! "UBL_INVOICE" → "ubl_invoice"\n\`\`\``
+  },
+  peel: {
+    label: 'peel(texte, caractère) → texte',
+    doc: `**Supprime** le caractère spécifié en **début et fin** de chaîne (équivalent d'un trim ciblé).\n\nCourant pour nettoyer les retours à la ligne en fin de ligne lue.\n\n\`\`\`rte\ntPropre := peel(tLine, NL)   ! supprime le \\n en début/fin\ntSans   := peel(tVal, " ")   ! supprime les espaces en début/fin\n\`\`\``
+  },
+  split: {
+    label: 'split(texte, taTableau, séparateur) → numérique',
+    doc: `**Découpe** une chaîne selon le séparateur et remplit \`taTableau\` (tableau indexé à partir de 1).\n\nRetourne le **nombre d'éléments** produits.\n\n\`\`\`rte\nnNb := split(tLigne, taParts, ";")\nnI  := 1\nwhile (nI <= nNb) do\n    tChamp := taParts[nI]\n    LOG("Champ", tChamp)\n    nI++\nendwhile\n\`\`\``
+  },
+  pick: {
+    label: 'pick(colonne, ligne, fin) → texte',
+    doc: `**Lit un champ** dans le message courant (flux d'entrée).\n\nLe plus souvent utilisé pour lire **toute la ligne courante** :\n\`\`\`rte\ntLine := pick(1, 1, EOL)  ! lit depuis la col 1 jusqu'à EOL\n\`\`\`\n\nPour les fichiers à **structure fixe** (colonnes positionnelles) :\n\`\`\`rte\ntCode := pick(1, 1, 3)    ! colonnes 1 à 3\ntNom  := pick(4, 1, 33)   ! colonnes 4 à 33\n\`\`\``
+  },
+  time: {
+    label: 'time(format) → texte  ou  time("now", format)',
+    doc: `**Retourne la date/heure courante** selon le format \`strftime\`.\n\nFormats les plus courants :\n- \`%Y-%m-%dT%H:%M:%S\` → \`2026-03-09T14:30:00\` (ISO 8601)\n- \`%Y%m%d\` → \`20260309\`\n- \`%d/%m/%Y\` → \`09/03/2026\`\n- \`%H:%M:%S\` → heure seule\n\n\`\`\`rte\ntNow  := time("%Y-%m-%dT%H:%M:%S")\ntDate := time("now", "%Y%m%d")\n\`\`\``
+  },
+  copy: {
+    label: 'copy(source, destination)',
+    doc: `**Copie un fichier** depuis \`source\` vers \`destination\`.\n\n\`\`\`rte\ncopy(tCheminSrc, tCheminDest)\n\`\`\``
+  },
+  remove: {
+    label: 'remove(chemin)',
+    doc: `**Supprime un fichier** du système de fichiers.\n\n\`\`\`rte\nremove(tFichierTemp)  ! nettoyage après traitement\n\`\`\``
+  },
+  read: {
+    label: 'read(chemin) → texte',
+    doc: `**Lit le contenu entier d'un fichier** et le retourne comme texte.\n\n\`\`\`rte\ntContenu := read(tCheminFichier)\n\`\`\``
+  },
+  close: {
+    label: 'close(chemin)',
+    doc: `**Ferme un fichier ouvert** — Nécessaire après une redirection \`>>\` pour s'assurer que le contenu est bien écrit sur disque.\n\n\`\`\`rte\nprint(tData) >> tCheminSortie\nclose(tCheminSortie)  ! important : vide le buffer\n\`\`\``
+  },
+  base64encode: {
+    label: 'base64encode(source, destination)',
+    doc: `**Encode un fichier en Base64** et écrit le résultat dans \`destination\`.\n\nUtilisé pour embarquer des pièces jointes (PDF, images) dans un message XML.\n\n\`\`\`rte\nbase64encode(tFichierPDF, tFichierB64)\ntContenuB64 := read(tFichierB64)\n\`\`\``
+  },
+  base64decode: {
+    label: 'base64decode(source, destination)',
+    doc: `**Décode un fichier Base64** et écrit le résultat binaire dans \`destination\`.\n\n\`\`\`rte\nbase64decode(tFichierB64, tFichierOriginal)\n\`\`\``
+  },
+  print: {
+    label: 'print(valeur [, NL])  ou  print(val) >> fichier',
+    doc: `**Écrit en sortie** (stdout) ou **redirige vers un fichier** avec \`>>\`.\n\nUsages principaux :\n\`\`\`rte\nprint(MESSAGE_OUT)            ! écrit le XML de sortie\nprint("debug: ", tVal, NL)    ! log dans la console\nprint(tLigne) >> tCheminOut   ! écrit dans un fichier (append)\n\`\`\`\n\n> Ne pas oublier \`close(tCheminOut)\` après une redirection.`
+  },
+  valid: {
+    label: 'valid(objet) → booléen',
+    doc: `**Teste si une valeur est valide** — retourne \`TRUE\` si la variable est non vide, non nulle, non \`EMPTY\`.\n\nFonctionne sur les variables texte/num/bool, les messages XML, les tableaux.\n\n\`\`\`rte\nif valid(MESSAGE_OUT) then\n    print(MESSAGE_OUT)\nendif\nif not valid(tNumFact) then\n    ERREUR("Numéro de facture manquant", EMPTY)\nendif\n\`\`\``
+  },
+  log: {
+    label: 'log(valeur, …) — log bas niveau',
+    doc: `**Log bas niveau** — Écrit dans le journal d'exécution du RTE.\n\nPréférer **\`LOG()\`** (majuscules) qui est la version Generix avec étiquette structurée.\n\n\`\`\`rte\nlog("Valeur trouvée: ", tVal, NL)\n\`\`\``
+  },
+  LOG: {
+    label: 'LOG("label", valeur)',
+    doc: `**Log informatif Generix** — Enregistre une information dans le journal avec une étiquette lisible.\n\nVisible dans l'interface Generix au niveau du document traité.\n\n\`\`\`rte\nLOG("NumFacture", tNumFact)\nLOG("Statut",     pDOC.STATUS)\nLOG("NbLignes",   nCpt)\n\`\`\``
+  },
+  ERREUR: {
+    label: 'ERREUR("label", valeur)',
+    doc: `**Log d'erreur Generix** — Enregistre une erreur dans le journal.\n\n> ⚠️ N'arrête **pas** le traitement — utiliser \`bfEXIT(1)\` ensuite si nécessaire.\n\n\`\`\`rte\nERREUR("Champ TVA manquant", tChampTVA)\nbfEXIT(1)\n\`\`\``
+  },
+  edierrordump: {
+    label: 'edierrordump(MESSAGE_OUT)',
+    doc: `**Dump du message en erreur** — Écrit dans le journal les détails d'erreur d'un message XML non valide.\n\nÀ utiliser systématiquement quand \`valid(MESSAGE_OUT)\` retourne \`FALSE\`.\n\n\`\`\`rte\nif not valid(MESSAGE_OUT) then\n    edierrordump(MESSAGE_OUT)\n    bfEXIT(1)\nendif\n\`\`\``
+  },
+  addDocumentError: {
+    label: 'addDocumentError(uuid, code, message)',
+    doc: `**Ajoute une erreur fonctionnelle au document** dans le système Generix.\n\n- \`uuid\` : identifiant du document (\`pDOC.UUID\`)\n- \`code\` : code erreur métier (ex: \`"ERR_TVA_001"\`)\n- \`message\` : description lisible\n\n\`\`\`rte\naddDocumentError(pDOC.UUID, "ERR_TVA_001", "Taux de TVA invalide pour la France")\n\`\`\``
+  },
+  attachDocumentFile: {
+    label: 'attachDocumentFile(uuid, chemin, type)',
+    doc: `**Attache un fichier à un document** dans Generix (ex : PDF associé à une facture XML).\n\n\`\`\`rte\nattachDocumentFile(pDOC.UUID, tCheminPDF, "PDF")\n\`\`\``
+  },
+  loadjson: {
+    label: 'loadjson(chaîneJSON) → objet',
+    doc: `**Parse une chaîne JSON** en objet navigable par clés.\n\n\`\`\`rte\noData   := loadjson(tJsonString)\ntValeur := oData["racine"]["cle"]\n\`\`\``
+  },
+  find: {
+    label: 'find(BASE, CLE=valeur, …, COLONNE) → texte',
+    doc: `**Recherche en base de paramétrage** — Requête sur un fichier \`.cfg\` déclaré avec \`base\`.\n\nRetourne la valeur de la colonne demandée (dernier argument).\n\n\`\`\`rte\nbase "pdp_setting.cfg" PS\n! ...\ntEndpoint := find(PS, TYPE="INVOICE", COUNTRY="FR", URL)\n\`\`\`\n\nLes recherches peuvent être enchaînées (cascade) pour affiner le résultat.`
+  },
+
+  // ── Fonctions bibliothèque Generix ─────────────────────────────────────────
+
+  bfBEGIN: {
+    label: 'bfBEGIN() — lib Generix [OBLIGATOIRE]',
+    doc: `**OBLIGATOIRE** dans \`begin\` — Initialise le contexte d'exécution Generix :\n- Connexion à la base Generix\n- Chargement des paramètres \`pDOC.*\`, \`pDOF.*\`\n- Initialisation des journaux\n\n> ⚠️ Doit être la **première instruction** du bloc \`begin\` sans exception.\n\n\`\`\`rte\nbegin\n    bfBEGIN()   ! toujours en premier\n    tMode := "SENDING"\nendbegin\n\`\`\``
+  },
+  bfEND: {
+    label: 'bfEND() — lib Generix [OBLIGATOIRE]',
+    doc: `**OBLIGATOIRE** dans \`end\` — Finalise le traitement Generix :\n- Sauvegarde des paramètres \`pDOC.*\` modifiés\n- Fermeture des connexions\n- Écriture des journaux\n\n> ⚠️ Doit être la **dernière instruction** du bloc \`end\` sans exception.\n\n\`\`\`rte\nend\n    print(MESSAGE_OUT)\n    bfEND()   ! toujours en dernier\nendend\n\`\`\``
+  },
+  bfEXIT: {
+    label: 'bfEXIT(code) — arrêt immédiat',
+    doc: `**Arrête immédiatement le traitement** avec un code de sortie.\n\n- \`bfEXIT(0)\` → **succès** (traitement terminé normalement)\n- \`bfEXIT(1)\` → **erreur** (le document sera mis en erreur dans Generix)\n\n\`\`\`rte\nif not valid(MESSAGE_OUT) then\n    edierrordump(MESSAGE_OUT)\n    bfEXIT(1)\nendif\n\`\`\``
+  },
+};
+
+// ══════════════════════════════════════════════════════════════════════════════
+// PARAMÈTRES SYSTÈME pDOC / pDOF / pEDISEND / pMESSAGE / pPROCESS
+// ══════════════════════════════════════════════════════════════════════════════
+
+const PDOC_PARAMS = {
+  'pDOC.UUID':                   '**Identifiant unique du document** (GUID généré par Generix). Utilisé dans `addDocumentError()`, `attachDocumentFile()`…',
+  'pDOC.FROM':                   '**Émetteur** du document (identifiant Generix ou SIRET/GLN selon le profil).',
+  'pDOC.TO':                     '**Destinataire** du document (identifiant Generix ou SIRET/GLN selon le profil).',
+  'pDOC.NUMBER':                 '**Numéro du document** (ex : numéro de facture, numéro de bon de commande).',
+  'pDOC.STATUS':                 '**Statut du document**.\n\nValeurs possibles : `NONE`, `TO_CORRECT`, `INVOICED`, `REJECTED`.',
+  'pDOC.STAGE':                  '**Étape du cycle de vie** du document dans Generix.\n\nValeurs possibles : `UPLOADED`, `SENT`, `REJECTED`, `REFUSED`, `OPENED`, `AVAILABLE`, `PAYMENT_RECEIVED`, `CORRECT`.',
+  'pDOC.TRANSLATOR':             '**Format du flux entrant** (norme documentaire).\n\nValeurs possibles : `CII`, `UBL_INVOICE`, `UBL_CREDITNOTE`, `FACTUR-X`, `FA3`, `XCBL`, `D96A`, `D93A`, `D01B`, `IDOC`, `JSON`, `CSV`…',
+  'pDOC.TRANSPORT':              '**Canal de transport** utilisé.\n\nValeurs possibles : `PDP`, `PEPPOL`, `KSEF`, `CUSTOM`.',
+  'pDOC.NATURE':                 '**Nature de l\'échange** B2B/B2C/B2G.\n\nValeurs possibles : `B2B`, `B2B_INTERNATIONAL`, `B2C`, `B2G`.',
+  'pDOC.PURPOSE':                '**Objectif du traitement**.\n\nValeurs possibles : `TRAD`, `NO_TRAD`, `NO_TRAD_CII`, `NO_TRAD_SB`, `TRAD_SB`.',
+  'pDOC.PROFILE':                '**Profil de traitement Generix** associé au document (détermine les règles métier appliquées).',
+  'pDOC.PROCESSING_WAY':         '**Sens du traitement**.\n\nValeurs possibles : `SENDING` (émission) ou `RECEIVING` (réception).',
+  'pDOC.COUNTRY_RULES_1':        '**Code pays de l\'émetteur** pour les règles fiscales (ex: `FR`, `DE`, `PL`).',
+  'pDOC.COUNTRY_RULES_2':        '**Code pays du destinataire** pour les règles fiscales.',
+  'pDOC.USE_CASE':               '**Code de cas d\'usage** métier (spécifique au profil Generix configuré).',
+  'pDOC.CUSTOM':                 '**Paramètre document personnalisé** — Variable persistante libre, nommée `pDOC.CUSTOM.xxx`.\n\nSauvegardée par `bfEND()` et accessible dans les étapes suivantes du workflow.\n\n```rte\npDOC.CUSTOM.FORMAT  := tFormat\npDOC.CUSTOM.SIRET   := tSiret\n```',
+  'pDOF.INPUT.NAME':             '**Nom du fichier d\'entrée** (sans chemin complet).',
+  'pDOF.INPUT.TYPE':             '**Type du fichier d\'entrée**.\n\nValeurs possibles : `XML`, `PDF`, `EDI`, `SAP`, `JSON`, `CSV`, `XCBL`.',
+  'pDOF.INPUT.ACTIONNAME':       '**Nom de l\'action Generix** ayant déclenché ce RTE (identifie le point d\'entrée dans le workflow).',
+  'pDOF.INPUT.COMMENT':          '**Commentaire** associé au fichier d\'entrée.',
+  'pDOF.OUTPUT.NAME':            '**Nom du fichier de sortie** généré par ce RTE.',
+  'pDOF.COMMENT':                '**Commentaire global** du flux de fichier.',
+  'pDOF.TYPE':                   '**Type du flux** de fichier (entrant/sortant).',
+  'pEDISEND.ORIGINAL.NAME':      '**Nom original du fichier EDI** (sans chemin ni extension).',
+  'pEDISEND.ORIGINAL.FULLNAME':  '**Nom complet original** du fichier EDI (avec extension, sans chemin).',
+  'pEDISEND.ORIGINAL.REALNAME':  '**Chemin complet réel** du fichier EDI d\'entrée sur le système de fichiers.',
+  'pPROCESS_OUTPUT_DIR':         '**Répertoire de sortie** du processus courant — où écrire les fichiers produits.',
+  'pPROCESS_WORK_DIR':           '**Répertoire de travail temporaire** du processus courant — pour les fichiers intermédiaires.',
+  'pMESSAGE.BROKER.FORMAT':      '**Format du message** dans le broker Generix.',
+  'pMESSAGE.BROKER.DOCTYPE':     '**Type de document** dans le broker Generix.',
+  'pMESSAGE.BROKER.KSEF_NUMBER': '**Numéro KSeF** — identifiant officiel de la facture électronique polonaise.',
+};
+
+// ══════════════════════════════════════════════════════════════════════════════
+// HOVER PAR PRÉFIXE DE VARIABLE
+// ══════════════════════════════════════════════════════════════════════════════
+
+function getVariablePrefixHover(word) {
+
+  if (/^eE[A-Za-z\w:]/.test(word)) {
+    return {
+      label: `${word}  ·  préfixe eE → élément XML`,
+      doc: `**Valeur d'un élément XML** — Peuplée automatiquement dans un bloc \`nodein\`, contient le **contenu texte** du nœud XML correspondant.\n\n\`\`\`rte\nnodein SInvoiceNumber gGInvoice, gGInvoiceHeader, gGInvoiceNumber\n    tNumFact := eEInvoiceNumber  ! contenu de <InvoiceNumber>…</InvoiceNumber>\nendnodein\n\`\`\`\n\n> Lecture seule dans \`nodein\`, assignation dans \`nodeout\`.`
+    };
+  }
+
+  if (/^eA[a-z\w:]/.test(word)) {
+    return {
+      label: `${word}  ·  préfixe eA → attribut XML`,
+      doc: `**Valeur d'un attribut XML** — Peuplée automatiquement dans un bloc \`nodein\`, contient la valeur de l'**attribut** du nœud ciblé.\n\n\`\`\`rte\nnodein SKodFormularza gGFaktura, gGNaglowek\n    tCodeSyst := eAkodSystemowy  ! attribut kodSystemowy="..."\nendnodein\n\`\`\`\n\n> Lecture seule dans \`nodein\`, assignation dans \`nodeout\`.`
+    };
+  }
+
+  if (/^gG[A-Za-z\w:]/.test(word)) {
+    return {
+      label: `${word}  ·  préfixe gG → groupe XML (chemin parent)`,
+      doc: `**Groupe / nœud XML parent** — Représente un élément structurel dans le **chemin hiérarchique** d'un \`nodein\` ou \`nodeout\` (équivalent XPath implicite).\n\nLes groupes se listent du plus général (niveau 1) au plus spécifique (niveau N), avant le segment cible \`S...\`.\n\n\`\`\`rte\nnodein SInvoiceNumber gGInvoice, gGInvoiceHeader, gGInvoiceNumber\n!                     ↑ niv 1     ↑ niv 2          ↑ niv 3\n! correspond à : Invoice > InvoiceHeader > InvoiceNumber\n\`\`\``
+    };
+  }
+
+  if (/^S[A-Z][A-Za-z\w:]+$/.test(word)) {
+    return {
+      label: `${word}  ·  préfixe S → segment XML (nœud cible)`,
+      doc: `**Segment XML ciblé** — Le **nœud XML précis** sur lequel porte le \`nodein\` ou \`nodeout\`. C'est toujours le **premier argument** du bloc.\n\nContrairement aux groupes (\`gG...\`) qui définissent le chemin, le segment est le nœud terminal effectivement lu ou écrit.\n\n\`\`\`rte\nnodein SInvoiceNumber gGInvoice, gGInvoiceHeader, gGInvoiceNumber\n!       ↑ nœud cible = élément <InvoiceNumber>\n\`\`\``
+    };
+  }
+
+  if (/^ta[A-Za-z\w]/.test(word)) {
+    return {
+      label: `${word}  ·  préfixe ta → tableau (array)`,
+      doc: `**Tableau associatif** — Peut être accédé par **index numérique** ou **clé texte**.\n\n\`\`\`rte\ntaLine[1]         := "première ligne"\ntaLine[nCpt]      := tValeur\ntaHeader["SIRET"] := tSiret\n\`\`\`\n\nItération sur toutes les entrées :\n\`\`\`rte\nwhile tIdx in taLine do\n    LOG("Ligne", taLine[tIdx])\nendwhile\n\`\`\`\n\nAlimenté aussi par \`split()\` :\n\`\`\`rte\nnNb := split(tLigne, taChamps, ";")\n\`\`\``
+    };
+  }
+
+  if (/^t[A-Z]\w*$/.test(word)) {
+    return {
+      label: `${word}  ·  préfixe t → variable texte`,
+      doc: `**Variable texte** — Contient une chaîne de caractères.\n\nInitialisée avec \`:=\`, concaténée avec \`build()\`.\n\n\`\`\`rte\ntNom     := "Facture"\ntNumFact := eEInvoiceNumber\ntResult  := build(tNom, " n°", tNumFact)\n\`\`\``
+    };
+  }
+
+  if (/^n[A-Z]\w*$/.test(word)) {
+    return {
+      label: `${word}  ·  préfixe n → variable numérique`,
+      doc: `**Variable numérique** — Entier ou décimal. Supporte les opérateurs arithmétiques et l'incrémentation.\n\n\`\`\`rte\nnTotal := 0\nnCpt++           ! incrémentation\nnTotal := nTotal + nMontantLigne\n\`\`\``
+    };
+  }
+
+  if (/^b[A-Z]\w*$/.test(word)) {
+    return {
+      label: `${word}  ·  préfixe b → variable booléenne`,
+      doc: `**Variable booléenne** — Vaut \`TRUE\` ou \`FALSE\`. Sert de flag de contrôle.\n\n\`\`\`rte\nbOK     := TRUE\nbErreur := FALSE\nif bOK then\n    LOG("Résultat", "succès")\nendif\n\`\`\``
+    };
+  }
+
+  if (/^p[A-Z][A-Z_0-9]+$/.test(word)) {
+    return {
+      label: `${word}  ·  préfixe p → paramètre document (persistant)`,
+      doc: `**Paramètre document** — Variable **persistante** : sa valeur est sauvegardée dans la base Generix par \`bfEND()\` et accessible dans les étapes suivantes du workflow.\n\nContrairement aux variables \`t...\`, \`n...\`, \`b...\` qui sont locales au RTE.\n\n\`\`\`rte\npSTATUS   := "OK"\npFORMAT   := pDOC.TRANSLATOR\npCUSTOM   := build("TYPE=", tType, ";PAYS=", tPays)\n\`\`\``
+    };
+  }
+
+  if (/^cCount\w+/.test(word)) {
+    return {
+      label: `${word}  ·  préfixe cCount → compteur automatique`,
+      doc: `**Compteur automatique Generix** — Incrémenté automatiquement par le moteur lors de certaines opérations.\n\n\`\`\`rte\ncCountAck:R08  ! compteur d'acquittements R08\n\`\`\``
+    };
+  }
+
+  if (/^bf[A-Z]/.test(word)) {
+    return {
+      label: `${word}  ·  préfixe bf → fonction booléenne`,
+      doc: `**Fonction utilisateur retournant un booléen** (\`TRUE\` / \`FALSE\`).\n\n\`\`\`rte\nfunction bfSearchIn(tString, tSearch)\n    nSearch := index(tString, tSearch)\n    if nSearch = 0 then\n        return FALSE\n    endif\n    return TRUE\nendfunction\n\`\`\``
+    };
+  }
+
+  if (/^tf[A-Z]/.test(word)) {
+    return {
+      label: `${word}  ·  préfixe tf → fonction texte`,
+      doc: `**Fonction utilisateur retournant une chaîne de caractères**.\n\n\`\`\`rte\nfunction tfFormatDate(tDate)\n    return build(substr(tDate, 9, 10), "/", substr(tDate, 6, 7), "/", substr(tDate, 1, 4))\nendfunction\n\`\`\``
+    };
+  }
+
+  if (/^nf[A-Z]/.test(word)) {
+    return {
+      label: `${word}  ·  préfixe nf → fonction numérique`,
+      doc: `**Fonction utilisateur retournant un nombre** (entier ou décimal).\n\n\`\`\`rte\nfunction nfCountLines(tContent)\n    nCpt := 0\n    ! ...\n    return nCpt\nendfunction\n\`\`\``
+    };
+  }
+
+  return null;
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// CONSTRUCTION D'UN HOVER MARKDOWN
+// ══════════════════════════════════════════════════════════════════════════════
+
+function buildHover(label, doc) {
+  const md = new vscode.MarkdownString();
+  md.isTrusted = true;
+  md.supportHtml = false;
+  md.appendMarkdown(`### ${label}\n\n${doc}`);
+  return new vscode.Hover(md);
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// PROVIDER PRINCIPAL
+// ══════════════════════════════════════════════════════════════════════════════
+
+function provideHover(document, position) {
+  const lineText = document.lineAt(position).text;
+  const wordRange = document.getWordRangeAtPosition(position, /[\w:.]+/);
+  if (!wordRange) return null;
+
+  const word = document.getText(wordRange);
+
+  // ── 1. Paramètres système pDOC.xxx / pDOF.xxx / etc. ──────────────────────
+  //    Cherche d'abord les clés exactes (ex: pDOC.TRANSLATOR)
+  for (const key of Object.keys(PDOC_PARAMS)) {
+    const idx = lineText.indexOf(key);
+    if (idx !== -1) {
+      const start = document.offsetAt(new vscode.Position(position.line, idx));
+      const end   = start + key.length;
+      const cur   = document.offsetAt(position);
+      if (cur >= start && cur <= end) {
+        return buildHover(`\`${key}\`  ·  paramètre système`, PDOC_PARAMS[key]);
+      }
+    }
+  }
+  //    Puis le préfixe générique pDOC.CUSTOM.xxx
+  if (/^pDOC\.CUSTOM\.\w+$/.test(word)) {
+    return buildHover(`\`${word}\`  ·  paramètre personnalisé`, PDOC_PARAMS['pDOC.CUSTOM']);
+  }
+
+  // ── 2. Préprocesseur (#define / #include) ─────────────────────────────────
+  const trimmed = lineText.trimStart();
+  if (trimmed.startsWith('#define') && position.character <= lineText.indexOf('#define') + 7) {
+    const entry = HOVER_DATA['#define'];
+    return buildHover(`\`${entry.label}\``, entry.doc);
+  }
+  if (trimmed.startsWith('#include') && position.character <= lineText.indexOf('#include') + 8) {
+    const entry = HOVER_DATA['#include'];
+    return buildHover(`\`${entry.label}\``, entry.doc);
+  }
+
+  // ── 3. Mots-clés et fonctions connus ──────────────────────────────────────
+  if (HOVER_DATA[word]) {
+    const entry = HOVER_DATA[word];
+    return buildHover(`\`${entry.label}\``, entry.doc);
+  }
+
+  // ── 4. Préfixes de variables / fonctions utilisateur ──────────────────────
+  const prefixHover = getVariablePrefixHover(word);
+  if (prefixHover) {
+    return buildHover(`\`${prefixHover.label}\``, prefixHover.doc);
+  }
+
+  return null;
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// ACTIVATION DE L'EXTENSION
+// ══════════════════════════════════════════════════════════════════════════════
+
 function activate(context) {
+
+  // ── Hover provider ─────────────────────────────────────────────────────────
+  const hoverProvider = vscode.languages.registerHoverProvider(
+    { language: 'rte' },
+    { provideHover }
+  );
+  context.subscriptions.push(hoverProvider);
+
+  // ── Formateur de code RTE ──────────────────────────────────────────────────
+  const formatter = vscode.languages.registerDocumentFormattingEditProvider('rte', {
+    provideDocumentFormattingEdits(document, options) {
+      return formatRTE(document, options);
+    }
+  });
+  context.subscriptions.push(formatter);
+
+  // ── Injection icônes Material Icon Theme ───────────────────────────────────
   try {
     const iconThemeId = vscode.workspace
       .getConfiguration('workbench')
       .get('iconTheme');
 
-    // Seulement si Material Icon Theme est actif
     if (iconThemeId && iconThemeId.startsWith('material-icon-theme')) {
       const config = vscode.workspace.getConfiguration('material-icon-theme');
-
       const existing = config.get('files.associations') || {};
       const associations = Object.assign({}, existing);
 
@@ -33,33 +594,11 @@ function activate(context) {
   } catch (err) {
     console.error('[rte-language] Erreur lors de l\'injection des icônes :', err);
   }
-
-  // Formateur de code RTE
-  const formatter = vscode.languages.registerDocumentFormattingEditProvider('rte', {
-    provideDocumentFormattingEdits(document, options) {
-      return formatRTE(document, options);
-    }
-  });
-
-  context.subscriptions.push(formatter);
-
-  // Hover : affiche le type de la variable/fonction survolée
-  const hover = vscode.languages.registerHoverProvider('rte', {
-    provideHover(document, position) {
-      const range = document.getWordRangeAtPosition(position, /[a-zA-Z_][\w:]*/);
-      if (!range) return;
-      const word = document.getText(range);
-      const info = getRteTypeInfo(word);
-      if (!info) return;
-      const md = new vscode.MarkdownString();
-      md.appendMarkdown(`**$(symbol-variable) ${info.label}**\n\n${info.description}`);
-      md.supportThemeIcons = true;
-      return new vscode.Hover(md, range);
-    }
-  });
-
-  context.subscriptions.push(hover);
 }
+
+// ══════════════════════════════════════════════════════════════════════════════
+// FORMATEUR RTE
+// ══════════════════════════════════════════════════════════════════════════════
 
 /**
  * Formate un document RTE :
@@ -218,55 +757,6 @@ function isOpener(keyword) {
   if (/^default\s*:/.test(keyword)) return true;      // default: switch (ouvre le contenu)
   if (keyword.startsWith('case ') || keyword.startsWith('case"')) return true;
   return false;
-}
-
-/**
- * Retourne le label et la description du type RTE d'un identifiant
- * selon son préfixe, ou null si non reconnu.
- * @param {string} word
- */
-function getRteTypeInfo(word) {
-  // Blocs structurels
-  if (word === 'nodein')  return {
-    label: 'nodein  →  Lecture XML',
-    description:
-      'Déclenché à chaque fois que le parseur XML rencontre le nœud correspondant au chemin déclaré.\n\n' +
-      '```rte\nnodein SInvoiceNumber gGInvoice, gGInvoiceHeader, gGInvoiceNumber\n' +
-      '    tNumFact := eEInvoiceNumber\nendnodein\n```\n\n' +
-      '**Variables disponibles à l\'intérieur :**\n' +
-      '- `eEXxx` — contenu texte de l\'élément\n' +
-      '- `eAXxx` — valeur d\'un attribut de l\'élément'
-  };
-  if (word === 'nodeout') return {
-    label: 'nodeout  →  Écriture XML',
-    description:
-      'Définit un nœud à écrire dans le message de sortie (`building`).\n\n' +
-      '```rte\nnodeout SApplicationResponse gGApplicationResponse\n' +
-      '    eAxmlns := "rrn:org.xcbl:..."\nendnodeout\n```\n\n' +
-      '**Variables utilisables à l\'intérieur :**\n' +
-      '- `eEXxx` — définit le contenu texte du nœud\n' +
-      '- `eAXxx` — définit un attribut du nœud'
-  };
-
-  // Fonctions — à tester avant les variables (bf/tf/nf avant b/t/n)
-  if (/^bf[A-Z]/.test(word)) return { label: `bf  →  Fonction booléenne`, description: 'Retourne `TRUE` ou `FALSE`.' };
-  if (/^tf[A-Z]/.test(word)) return { label: `tf  →  Fonction texte`,     description: 'Retourne une chaîne de caractères.' };
-  if (/^nf[A-Z]/.test(word)) return { label: `nf  →  Fonction numérique`, description: 'Retourne un nombre (entier ou décimal).' };
-
-  // Nœuds XML
-  if (/^eE\w/.test(word)) return { label: `eE  →  Élément XML`,    description: 'Valeur d\'un élément lu depuis le message entrant (`nodein`).' };
-  if (/^eA\w/.test(word)) return { label: `eA  →  Attribut XML`,   description: 'Valeur d\'un attribut lu depuis le message entrant (`nodein`).' };
-  if (/^gG\w/.test(word)) return { label: `gG  →  Groupe XML`,     description: 'Nœud ou chemin structurel dans le message XML.' };
-  if (/^S[A-Z]\w/.test(word)) return { label: `S  →  Segment`,     description: 'Nœud de sortie ciblé (`nodeout`).' };
-
-  // Variables — ta avant t
-  if (/^ta[A-Z]\w*/.test(word)) return { label: `ta  →  Tableau`,   description: 'Array associatif ou indexé. Ex : `taLine[1] := "abc"`' };
-  if (/^t[A-Z]\w*/.test(word))  return { label: `t  →  Texte`,      description: 'Variable de type chaîne de caractères (string). Ex : `tNom := "facture"`' };
-  if (/^n[A-Z]\w*/.test(word))  return { label: `n  →  Numérique`,  description: 'Variable de type entier ou décimal. Ex : `nTotal := 42`' };
-  if (/^b[A-Z]\w*/.test(word))  return { label: `b  →  Booléen`,    description: 'Variable booléenne (`TRUE` / `FALSE`). Ex : `bOK := TRUE`' };
-  if (/^p[A-Z]/.test(word))     return { label: `p  →  Paramètre`,  description: 'Paramètre du document, persistant entre les sections. Ex : `pSTATUS := "OK"`' };
-
-  return null;
 }
 
 function deactivate() {}
