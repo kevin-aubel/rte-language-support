@@ -42,6 +42,23 @@ function activate(context) {
   });
 
   context.subscriptions.push(formatter);
+
+  // Hover : affiche le type de la variable/fonction survolée
+  const hover = vscode.languages.registerHoverProvider('rte', {
+    provideHover(document, position) {
+      const range = document.getWordRangeAtPosition(position, /[a-zA-Z_][\w:]*/);
+      if (!range) return;
+      const word = document.getText(range);
+      const info = getRteTypeInfo(word);
+      if (!info) return;
+      const md = new vscode.MarkdownString();
+      md.appendMarkdown(`**$(symbol-variable) ${info.label}**\n\n${info.description}`);
+      md.supportThemeIcons = true;
+      return new vscode.Hover(md, range);
+    }
+  });
+
+  context.subscriptions.push(hover);
 }
 
 /**
@@ -201,6 +218,55 @@ function isOpener(keyword) {
   if (/^default\s*:/.test(keyword)) return true;      // default: switch (ouvre le contenu)
   if (keyword.startsWith('case ') || keyword.startsWith('case"')) return true;
   return false;
+}
+
+/**
+ * Retourne le label et la description du type RTE d'un identifiant
+ * selon son préfixe, ou null si non reconnu.
+ * @param {string} word
+ */
+function getRteTypeInfo(word) {
+  // Blocs structurels
+  if (word === 'nodein')  return {
+    label: 'nodein  →  Lecture XML',
+    description:
+      'Déclenché à chaque fois que le parseur XML rencontre le nœud correspondant au chemin déclaré.\n\n' +
+      '```rte\nnodein SInvoiceNumber gGInvoice, gGInvoiceHeader, gGInvoiceNumber\n' +
+      '    tNumFact := eEInvoiceNumber\nendnodein\n```\n\n' +
+      '**Variables disponibles à l\'intérieur :**\n' +
+      '- `eEXxx` — contenu texte de l\'élément\n' +
+      '- `eAXxx` — valeur d\'un attribut de l\'élément'
+  };
+  if (word === 'nodeout') return {
+    label: 'nodeout  →  Écriture XML',
+    description:
+      'Définit un nœud à écrire dans le message de sortie (`building`).\n\n' +
+      '```rte\nnodeout SApplicationResponse gGApplicationResponse\n' +
+      '    eAxmlns := "rrn:org.xcbl:..."\nendnodeout\n```\n\n' +
+      '**Variables utilisables à l\'intérieur :**\n' +
+      '- `eEXxx` — définit le contenu texte du nœud\n' +
+      '- `eAXxx` — définit un attribut du nœud'
+  };
+
+  // Fonctions — à tester avant les variables (bf/tf/nf avant b/t/n)
+  if (/^bf[A-Z]/.test(word)) return { label: `bf  →  Fonction booléenne`, description: 'Retourne `TRUE` ou `FALSE`.' };
+  if (/^tf[A-Z]/.test(word)) return { label: `tf  →  Fonction texte`,     description: 'Retourne une chaîne de caractères.' };
+  if (/^nf[A-Z]/.test(word)) return { label: `nf  →  Fonction numérique`, description: 'Retourne un nombre (entier ou décimal).' };
+
+  // Nœuds XML
+  if (/^eE\w/.test(word)) return { label: `eE  →  Élément XML`,    description: 'Valeur d\'un élément lu depuis le message entrant (`nodein`).' };
+  if (/^eA\w/.test(word)) return { label: `eA  →  Attribut XML`,   description: 'Valeur d\'un attribut lu depuis le message entrant (`nodein`).' };
+  if (/^gG\w/.test(word)) return { label: `gG  →  Groupe XML`,     description: 'Nœud ou chemin structurel dans le message XML.' };
+  if (/^S[A-Z]\w/.test(word)) return { label: `S  →  Segment`,     description: 'Nœud de sortie ciblé (`nodeout`).' };
+
+  // Variables — ta avant t
+  if (/^ta[A-Z]\w*/.test(word)) return { label: `ta  →  Tableau`,   description: 'Array associatif ou indexé. Ex : `taLine[1] := "abc"`' };
+  if (/^t[A-Z]\w*/.test(word))  return { label: `t  →  Texte`,      description: 'Variable de type chaîne de caractères (string). Ex : `tNom := "facture"`' };
+  if (/^n[A-Z]\w*/.test(word))  return { label: `n  →  Numérique`,  description: 'Variable de type entier ou décimal. Ex : `nTotal := 42`' };
+  if (/^b[A-Z]\w*/.test(word))  return { label: `b  →  Booléen`,    description: 'Variable booléenne (`TRUE` / `FALSE`). Ex : `bOK := TRUE`' };
+  if (/^p[A-Z]/.test(word))     return { label: `p  →  Paramètre`,  description: 'Paramètre du document, persistant entre les sections. Ex : `pSTATUS := "OK"`' };
+
+  return null;
 }
 
 function deactivate() {}

@@ -5,6 +5,7 @@ VSCode extension providing language support for **Generix RTE** (Rule Translatio
 ## Features
 
 - **Syntax highlighting** for `.rte` and `.inc` files
+- **Hover tooltips** — hovering over any typed identifier shows its type, description, and a code example; `nodein` and `nodeout` display their syntax and available variables
 - **Bracket matching** and auto-closing pairs
 - **Comment toggling** (`Ctrl+/`)
 - **Document formatting** for `.rte` and `.inc` files (`Format Document` / `Shift+Alt+F`)
@@ -40,6 +41,10 @@ Optional: install [Material Icon Theme](https://marketplace.visualstudio.com/ite
 File types `.rte` and `.inc` are automatically recognized after installation.
 
 ## Release Notes
+
+### 1.2.0
+
+- **Hover tooltips** — hovering over a typed variable or function shows its type name and description; `nodein` / `nodeout` blocks display their role, usage example, and available variables
 
 ### 1.1.1
 
