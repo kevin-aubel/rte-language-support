@@ -57,6 +57,94 @@ Extension destinée aux développeurs travaillant sur la plateforme **Generix**.
 
 - Syntax highlighting, language configuration, Material Icon Theme integration
 
+---
+
+## Contributing
+
+Toute contribution est la bienvenue. Voici le processus à suivre.
+
+### Prérequis
+
+```bash
+npm install -g @vscode/vsce
+```
+
+### Étapes
+
+**1. Créer une branche**
+
+```bash
+git checkout main
+git pull
+git checkout -b feat/ma-fonctionnalite
+```
+
+Conventions de nommage : `feat/`, `fix/`, `docs/`, `refactor/`.
+
+**2. Faire ses modifications**
+
+Le code source est organisé dans `src/` :
+
+```
+src/
+  data/hoverData.js          # mots-clés, fonctions, paramètres système
+  utils/blockUtils.js        # règles d'indentation partagées
+  providers/
+    hoverProvider.js         # tooltip au survol
+    completionProvider.js    # autocomplétion Ctrl+Space
+    definitionProvider.js    # Go to Definition F12
+    symbolProvider.js        # Outline / Document Symbols
+    formatterProvider.js     # formateur Shift+Alt+F
+    diagnosticProvider.js    # linter (blocs non fermés…)
+```
+
+**3. Tester en local (Extension Development Host)**
+
+Ouvrir le projet dans VSCode, puis `F5` pour lancer une fenêtre de debug avec l'extension chargée.
+
+**4. Packager et installer le `.vsix`**
+
+```bash
+vsce package
+```
+
+Cela génère un fichier `rte-language-X.X.X.vsix`. L'installer dans VSCode :
+
+```bash
+code --install-extension rte-language-X.X.X.vsix
+```
+
+Ou via l'UI : `Extensions` → `···` → `Install from VSIX…`
+
+**5. Valider**
+
+- Ouvrir un fichier `.rte` ou `.inc` et vérifier que la fonctionnalité modifiée fonctionne correctement.
+- Vérifier qu'aucune régression n'est introduite sur les autres features (hover, complétion, linter, formateur…).
+
+**6. Mettre à jour `package.json` et `README.md`**
+
+- Incrémenter la version dans `package.json` (`"version"`) selon [semver](https://semver.org/) :
+  - `patch` (x.x.**X**) → correctif, aucun changement d'API
+  - `minor` (x.**X**.0) → nouvelle fonctionnalité rétrocompatible
+  - `major` (**X**.0.0) → changement structurel majeur
+- Ajouter une entrée dans la section **Release Notes** du `README.md`.
+
+**7. Committer et ouvrir une Pull Request**
+
+```bash
+git add .
+git commit -m "feat: description courte de la modification"
+git push origin feat/ma-fonctionnalite
+```
+
+Puis ouvrir une PR sur GitHub vers `main`. Décrire clairement :
+- Ce qui a été modifié et pourquoi
+- Comment tester (scénario ou fichier `.rte` de test)
+
+> La publication sur le Marketplace VSCode est gérée par le mainteneur après merge.
+
+---
+
 ## License
 
 MIT
