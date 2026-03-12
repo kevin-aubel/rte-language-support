@@ -1,9 +1,0 @@
-{
-  "permissions": {
-    "allow": [
-      "Bash(grep -c \"\\\\`\\\\`\\\\`rte\" \"c:\\\\Users\\\\kevin.aubel\\\\Dev\\\\rte-language-support\\\\extension.js\")",
-      "Bash(grep -o \"\\\\`\\\\`\\\\`rte\" \"c:\\\\Users\\\\kevin.aubel\\\\Dev\\\\rte-language-support\\\\extension.js\")",
-      "Bash(grep \"doc: \\\\`\")"
-    ]
-  }
-}
