@@ -5,52 +5,42 @@ VSCode extension providing language support for **Generix RTE** (Rule Translatio
 ## Features
 
 - **Syntax highlighting** for `.rte` and `.inc` files
-- **Hover documentation** — full reference for keywords, functions, constants, system parameters and typed variables
+- **Hover documentation** — référence complète des mots-clés, fonctions, constantes, paramètres système et variables typées
+- **Autocompletion** (`Ctrl+Space`) — mots-clés, snippets de blocs, fonctions avec paramètres, constantes, paramètres `pDOC.*` / `pDOF.*`
 - **Bracket matching** and auto-closing pairs
 - **Comment toggling** (`Ctrl+/`)
-- **Document formatting** for `.rte` and `.inc` files (`Format Document` / `Shift+Alt+F`)
+- **Document formatting** (`Shift+Alt+F`) — indentation et normalisation des lignes vides
 - **Automatic icon association** for `.rte` and `.inc` files when [Material Icon Theme](https://marketplace.visualstudio.com/items?itemName=PKief.material-icon-theme) is active
 
 ---
 
 ## Requirements
 
-This extension is intended for developers working with the **Generix platform**. Access to the RTE language and its documentation is managed by Generix Group.
-
-Optional: install [Material Icon Theme](https://marketplace.visualstudio.com/items?itemName=PKief.material-icon-theme) to benefit from dedicated file icons.
-
-## Installation
-
-1. Open VSCode
-2. Go to the Extensions panel (`Ctrl+Shift+X`)
-3. Search for **RTE Language Support**
-4. Click **Install**
-
-File types `.rte` and `.inc` are automatically recognized after installation.
+Extension destinée aux développeurs travaillant sur la plateforme **Generix**. Optionnel : [Material Icon Theme](https://marketplace.visualstudio.com/items?itemName=PKief.material-icon-theme) pour les icônes de fichiers.
 
 ---
 
 ## Release Notes
 
+### 1.4.0
+
+- **Autocompletion** (`Ctrl+Space`) — snippets pour tous les blocs structurels (`nodein`, `if`, `while`, `switch`…), fonctions natives avec leurs paramètres, constantes et paramètres système `pDOC.*` / `pDOF.*`
+
 ### 1.3.0
 
-- **Hover documentation** — full reference for all keywords, built-in functions, constants and Generix library functions with usage examples
+- **Hover documentation** — référence complète avec exemples pour mots-clés, fonctions et fonctions Generix
 
 ### 1.2.0
 
-- Hover tooltips for typed variables
+- Hover tooltips pour les variables typées
 
 ### 1.1.1
 
-- RTE document formatter
-- Indentation and blank-line normalization rules
+- Formateur de document RTE (indentation + lignes vides)
 
 ### 1.0.0
 
-Initial release:
-- Syntax highlighting for RTE files
-- Language configuration (brackets, comments, auto-closing pairs)
-- Material Icon Theme integration for `.rte` and `.inc` files
+- Syntax highlighting, language configuration, Material Icon Theme integration
 
 ## License
 
