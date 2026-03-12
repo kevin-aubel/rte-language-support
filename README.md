@@ -33,7 +33,7 @@ Extension destinée aux développeurs travaillant sur la plateforme **Generix**.
 
 - **Outline / Document Symbols** — vue arborescente de la structure du fichier (fonctions, labels, blocs) dans le panneau Explorer
 
-### 1.1.4
+### 1.4.1
 
 - **Go to Definition** (`F12`) — navigation vers la définition des variables, fonctions et labels déclarés dans le fichier courant
 
