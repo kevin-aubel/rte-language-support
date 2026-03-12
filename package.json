@@ -3,7 +3,7 @@
   "publisher": "kevin-aubel",
   "displayName": "Generix RTE Language Support",
   "description": "Syntax highlighting, hover documentation, autocompletion, and code formatter for Generix RTE (.rte, .inc) files",
-  "version": "1.5.3",
+  "version": "2.0.0",
   "license": "MIT",
   "repository": {
     "type": "git",

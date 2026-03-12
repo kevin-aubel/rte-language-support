@@ -15,5 +15,16 @@
     ["(", ")"],
     ["[", "]"],
     ["\"", "\""]
-  ]
+  ],
+  "wordPattern": "(-?\\d*\\.\\d\\w*)|([a-zA-Z_#][a-zA-Z0-9_.:#]*)",
+  "folding": {
+    "markers": {
+      "start": "^\\s*(begin|end|nodein\\s|nodeout\\s|function\\s|if\\s|if\\(|while\\s|while\\(|switch\\s|switch\\(|line\\s*\\(|default)\\b",
+      "end": "^\\s*(endbegin|endend|endnodein|endnodeout|endfunction|endif|endwhile|endswitch|endline|enddefault)\\b"
+    }
+  },
+  "indentationRules": {
+    "increaseIndentPattern": "^\\s*(begin|end|nodein\\s|nodeout\\s|function\\s|if\\s.*then|while\\s.*do|while TRUE then|switch\\s|line\\s*\\(|default$|else$|elseif\\s.*then|case\\s.*:)\\s*(!.*)?$",
+    "decreaseIndentPattern": "^\\s*(endbegin|endend|endnodein|endnodeout|endfunction|endif|endwhile|endswitch|endline|enddefault|else$|elseif\\s|case\\s|default:)\\s*(!.*)?$"
+  }
 }

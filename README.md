@@ -4,15 +4,16 @@ VSCode extension providing language support for **Generix RTE** (Rule Translatio
 
 ## Features
 
-- **Syntax highlighting** for `.rte` and `.inc` files
-- **Hover documentation** — référence complète des mots-clés, fonctions, constantes, paramètres système et variables typées
-- **Autocompletion** (`Ctrl+Space`) — mots-clés, snippets de blocs, fonctions avec paramètres, constantes, paramètres `pDOC.*` / `pDOF.*`
+- **Syntax highlighting** — mots-clés, blocs, fonctions natives, variables typées (`t*`, `n*`, `b*`, `ta*`), paramètres système (`pDOC.*`, `pDOF.*`…), nœuds XML (`gG*`, `eE*`, `eA*`, `S*`), opérateurs
+- **Hover documentation** — référence complète des mots-clés, fonctions (natives + Generix + MongoDB), constantes, paramètres système, variables typées et préfixes utilisateur
+- **Autocompletion** (`Ctrl+Space`) — snippets multi-lignes pour tous les blocs, fonctions avec paramètres, constantes, paramètres `pDOC.*` / `pDOF.*` / `pREST_TRIGGER.*`
 - **Go to Definition** (`F12`) — navigation vers la définition des variables, fonctions et labels déclarés dans le fichier
-- **Diagnostics (linter)** — détection en temps réel des erreurs de syntaxe, variables non déclarées, blocs non fermés et autres violations de structure
+- **Diagnostics (linter)** — détection en temps réel des blocs non fermés, fermetures orphelines, `bfBEGIN()` / `bfEND()` manquants
 - **Bracket matching** and auto-closing pairs
-- **Comment toggling** (`Ctrl+/`)
-- **Document formatting** (`Shift+Alt+F`) — indentation et normalisation des lignes vides
-- **Outline / Document Symbols** — vue arborescente de la structure du fichier (fonctions, labels, blocs)
+- **Comment toggling** (`Ctrl+/`) — basé sur le commentaire ligne `!`
+- **Document formatting** (`Shift+Alt+F`) — indentation structurelle et normalisation des lignes vides
+- **Block folding** — repliage de tous les blocs (`begin`, `nodein`, `if`, `while`, `switch`, `function`…)
+- **Outline / Document Symbols** — vue arborescente de la structure du fichier (fonctions, `nodein`, `nodeout`, `line`, blocs)
 - **Automatic icon association** for `.rte` and `.inc` files when [Material Icon Theme](https://marketplace.visualstudio.com/items?itemName=PKief.material-icon-theme) is active
 
 ---
@@ -24,6 +25,32 @@ Extension destinée aux développeurs travaillant sur la plateforme **Generix**.
 ---
 
 ## Release Notes
+
+### 2.0.0
+
+Refonte complète de la couverture du langage RTE à partir de la documentation officielle Generix.
+
+**Syntax highlighting**
+- Coloration des **variables typées** par convention de nommage : `ta*` (tableau), `t*` (texte), `n*` (numérique), `b*` (booléen)
+- Opérateur de **comparaison** `=` (en plus de `:=`, `<>`, `<=`, `>=`)
+- **Opérateurs arithmétiques** `+`, `-`, `*`, `/`
+- Pattern dynamique pour les **requêtes MongoDB** `db.<collection>.(find|count|aggregate)`
+- Paramètres système étendus : `pPROCESS_OUTPUT_DIR`, `pPROCESS_WORK_DIR`, `pREST_TRIGGER.*`
+- Correction de la priorité `>>` vs `>` dans les opérateurs
+
+**Nouvelles fonctions documentées** (hover + autocomplétion + snippets)
+
+**Paramètres système**
+- `pREST_TRIGGER.METHOD`, `.BODY`, `.HEADERS`, `.PARAMS` — paramètres des déclencheurs REST
+
+**language-configuration.json**
+- `wordPattern` — sélection correcte des identifiants composés (`pDOC.UUID`, `#define`…)
+- `folding` — repliage de code sur tous les blocs structurels
+- `indentationRules` — règles d'auto-indentation
+
+### 1.5.3
+
+- Changement de structure de fichiers
 
 ### 1.5.0
 
@@ -83,20 +110,37 @@ Conventions de nommage : `feat/`, `fix/`, `docs/`, `refactor/`.
 
 **2. Faire ses modifications**
 
-Le code source est organisé dans `src/` :
+Le code source est organisé ainsi :
 
 ```
+extension.js                     # point d'entrée — activation et enregistrement des providers
+language-configuration.json      # commentaires, brackets, wordPattern, folding, indentationRules
+syntaxes/
+  rte.tmLanguage.json            # grammaire TextMate — coloration syntaxique
 src/
-  data/hoverData.js          # mots-clés, fonctions, paramètres système
-  utils/blockUtils.js        # règles d'indentation partagées
+  data/
+    hoverData.js                 # HOVER_DATA (mots-clés, fonctions) + PDOC_PARAMS (paramètres système)
+  utils/
+    blockUtils.js                # isOpener / isCloser — règles d'indentation partagées
   providers/
-    hoverProvider.js         # tooltip au survol
-    completionProvider.js    # autocomplétion Ctrl+Space
-    definitionProvider.js    # Go to Definition F12
-    symbolProvider.js        # Outline / Document Symbols
-    formatterProvider.js     # formateur Shift+Alt+F
-    diagnosticProvider.js    # linter (blocs non fermés…)
+    hoverProvider.js             # tooltip au survol (F12 / hover)
+    completionProvider.js        # autocomplétion Ctrl+Space (snippets + fonctions + params)
+    definitionProvider.js        # Go to Definition F12
+    symbolProvider.js            # Outline / Document Symbols
+    formatterProvider.js         # formateur Shift+Alt+F (indentation + lignes vides)
+    diagnosticProvider.js        # linter (blocs non fermés, bfBEGIN/bfEND manquants…)
 ```
+
+**Ajouter une nouvelle fonction built-in :**
+
+1. `src/data/hoverData.js` → ajouter une entrée dans `HOVER_DATA` avec `label` et `doc`
+2. `syntaxes/rte.tmLanguage.json` → ajouter le nom dans le pattern `support.function.builtin.rte`
+3. `src/providers/completionProvider.js` → ajouter `[label, snippet, detail]` dans le tableau `builtins`
+
+**Ajouter un paramètre système (`pDOC.*`, `pDOF.*`…) :**
+
+1. `src/data/hoverData.js` → ajouter la clé dans `PDOC_PARAMS`
+2. `syntaxes/rte.tmLanguage.json` → vérifier que le préfixe est couvert par `variable.other.param.doc.rte`
 
 **3. Tester en local (Extension Development Host)**
 

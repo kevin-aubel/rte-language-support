@@ -11,6 +11,7 @@
     { "include": "#nodes" },
     { "include": "#functions" },
     { "include": "#params" },
+    { "include": "#typed-variables" },
     { "include": "#numbers" },
     { "include": "#operators" }
   ],
@@ -88,7 +89,7 @@
     },
 
     "nodes": {
-      "comment": "XML node identifiers gG... eE... eA... sS...",
+      "comment": "XML node identifiers gG... eE... eA... S...",
       "patterns": [
         {
           "name": "entity.name.tag.group.rte",
@@ -106,11 +107,15 @@
     },
 
     "functions": {
-      "comment": "Built-in functions and user functions",
+      "comment": "Built-in functions, Generix library functions, and user functions",
       "patterns": [
         {
           "name": "support.function.builtin.rte",
-          "match": "\\b(build|length|substr|index|replace|toupper|tolower|peel|split|pick|time|copy|remove|read|close|base64encode|base64decode|print|valid|log|LOG|ERREUR|edierrordump|addDocumentError|attachDocumentFile|loadjson|find|sendGisEmissionMessage|sendKsefInvoiceMessage|bfEXIT)\\b"
+          "match": "\\b(build|length|substr|index|replace|toupper|tolower|peel|split|pick|time|copy|remove|rename|read|close|base64encode|base64decode|print|valid|log|LOG|ERREUR|edierrordump|edierrorlist|addDocumentError|attachDocumentFile|loadjson|find|new|next|flush|put|debug|compare|hexaToUnicode|number|strip|load|zip|unzip|sendGisEmissionMessage|sendKsefInvoiceMessage)\\b"
+        },
+        {
+          "name": "support.function.db.rte",
+          "match": "\\bdb\\.[a-zA-Z_][\\w]*\\.(find|count|aggregate)\\b"
         },
         {
           "name": "support.function.lib.rte",
@@ -124,11 +129,11 @@
     },
 
     "params": {
-      "comment": "Document parameters pXXX and pDOC.XXX",
+      "comment": "Document parameters pXXX and pDOC.XXX / pDOF.XXX / pREST_TRIGGER.XXX",
       "patterns": [
         {
           "name": "variable.other.param.doc.rte",
-          "match": "\\b(pDOC|pDOF|pEDISEND|pMESSAGE|pREST_TRIGGER)\\.[\\w.]+"
+          "match": "\\b(pDOC|pDOF|pEDISEND|pMESSAGE|pREST_TRIGGER|pPROCESS_OUTPUT_DIR|pPROCESS_WORK_DIR)(?:\\.[\\w.]+)?"
         },
         {
           "name": "variable.other.param.rte",
@@ -137,6 +142,28 @@
         {
           "name": "variable.other.counter.rte",
           "match": "\\bcCount[\\w:]+"
+        }
+      ]
+    },
+
+    "typed-variables": {
+      "comment": "Typed variables by naming convention (ta=array, t=text, n=numeric, b=boolean)",
+      "patterns": [
+        {
+          "name": "variable.other.array.rte",
+          "match": "\\bta[A-Z]\\w*\\b"
+        },
+        {
+          "name": "variable.other.text.rte",
+          "match": "\\bt[A-Z]\\w*\\b"
+        },
+        {
+          "name": "variable.other.numeric.rte",
+          "match": "\\bn[A-Z]\\w*\\b"
+        },
+        {
+          "name": "variable.other.boolean.rte",
+          "match": "\\bb[A-Z]\\w*\\b"
         }
       ]
     },
@@ -153,16 +180,20 @@
           "match": ":="
         },
         {
+          "name": "keyword.operator.redirect.rte",
+          "match": ">>"
+        },
+        {
           "name": "keyword.operator.comparison.rte",
-          "match": "<>|<=|>=|<|>"
+          "match": "<>|<=|>=|<(?!<)|>(?!>)|(?<![:<>!])=(?!=)"
         },
         {
           "name": "keyword.operator.increment.rte",
           "match": "\\+\\+|--"
         },
         {
-          "name": "keyword.operator.redirect.rte",
-          "match": ">>"
+          "name": "keyword.operator.arithmetic.rte",
+          "match": "(?<!\\+)\\+(?!\\+)|(?<!-)(?<!bfEXIT\\s*\\()\\-(?!-)|\\*|(?<!/)/(?!/)"
         }
       ]
     }

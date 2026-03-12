@@ -323,6 +323,80 @@ const HOVER_DATA = {
     label: 'find(BASE, CLE=valeur, …, COLONNE) → texte',
     doc: `**Recherche en base de paramétrage** — Requête sur un fichier \`.cfg\` déclaré avec \`base\`.\n\nRetourne la valeur de la colonne demandée (dernier argument).\n\n\`\`\`rte\nbase "pdp_setting.cfg" PS\n! ...\ntEndpoint := find(PS, TYPE="INVOICE", COUNTRY="FR", URL)\n\`\`\`\n\nLes recherches peuvent être enchaînées (cascade) pour affiner le résultat.`
   },
+  rename: {
+    label: 'rename(source, destination)',
+    doc: `**Renomme un fichier** (ou le déplace) sur le système de fichiers.\n\n\`\`\`rte\nrename(tCheminOld, tCheminNew)\n\`\`\``
+  },
+  compare: {
+    label: 'compare(texte, motif) → booléen',
+    doc: `**Correspondance avec motif** (wildcards) — Compare un texte à un pattern et retourne \`TRUE\` si ça correspond.\n\nWildcards supportés :\n- \`*\` → n'importe quel nombre de caractères\n- \`?\` → un seul caractère\n- \`[…]\` → un ensemble de caractères valides\n\nPour utiliser ces symboles littéralement, les préfixer avec \`\\\\\\\\\`.\n\n\`\`\`rte\nif compare(tFormat, "*UBL*") then\n    LOG("Format", "UBL détecté")\nendif\nif compare(tCode, "[0-9]*") then\n    LOG("Code", "commence par un chiffre")\nendif\n\`\`\``
+  },
+  hexaToUnicode: {
+    label: 'hexaToUnicode(tHex) → caractère',
+    doc: `**Convertit un code hexadécimal** en caractère Unicode correspondant.\n\nLe paramètre doit être une chaîne commençant par \`x\` ou \`X\`.\n\n\`\`\`rte\ntSep := hexaToUnicode("x9")   ! tabulation (\\t)\ntEOL := hexaToUnicode("xa")    ! saut de ligne (\\n)\ntCR  := hexaToUnicode("xd")    ! retour chariot (\\r)\n\`\`\``
+  },
+  number: {
+    label: 'number(texte) → numérique',
+    doc: `**Convertit une chaîne de caractères en nombre**.\n\n\`\`\`rte\nnMontant := number(tMontantBrut)\nnQte     := number(replace(tQte, ",", "."))\n\`\`\``
+  },
+  strip: {
+    label: 'strip(texte, caractères) → texte',
+    doc: `**Supprime toutes les occurrences** des caractères spécifiés dans la chaîne.\n\nDifférence avec \`peel()\` : \`strip()\` supprime **partout** dans la chaîne, pas seulement en début/fin.\n\n\`\`\`rte\ntSans    := strip(tValeur, " ")     ! supprime tous les espaces\ntChiffre := strip(tSiret, " -.")    ! supprime espaces, tirets, points\n\`\`\``
+  },
+  debug: {
+    label: 'debug(valeur, …)',
+    doc: `**Log de débogage** — Écrit dans le flux de journalisation si \`LOGLEVEL >= 2\`.\n\n> Active avec le paramètre \`-l2\` lors des tests.\n\nDifférence avec \`log()\` : s'affiche uniquement en mode debug.\n\n\`\`\`rte\ndebug("Heure de traitement : ", time(), NL)\ndebug("Base de données : ", tBASE, NL)\n\`\`\``
+  },
+  new: {
+    label: 'new(tDirectory) → ENTRY',
+    doc: `**Crée un nouvel enregistrement vide** dans une collection RTE.\n\nL'index est assigné automatiquement. Les valeurs sont affectées après l'appel.\n\n\`\`\`rte\nENTRY := new("mybase")\nENTRY.NAME    := tNom\nENTRY.ADDRESS := tAdresse\nENTRY.AGE     := nAge\nflush(ENTRY)  ! si autoflush désactivé\n\`\`\``
+  },
+  next: {
+    label: 'next(qCursor)',
+    doc: `**Avance le curseur** d'une requête — Consomme le premier enregistrement du curseur et expose le suivant.\n\nÀ utiliser dans une boucle \`while valid(qCursor) do\`.\n\n\`\`\`rte\nqCursor := db.invoices.find("{'_ref':'0123456789'}")\nnCpt := 0\nwhile valid(qCursor) do\n    nCpt++\n    taResult[nCpt] := read(qCursor)\n    next(qCursor)\nendwhile\n\`\`\``
+  },
+  flush: {
+    label: 'flush([taBuffer,] nMin, nMax, tSep)  ou  flush(ENTRY)',
+    doc: `**Vide le buffer** (construit par \`put()\`) ou **persiste** un enregistrement de collection.\n\nUsages :\n- \`flush(0, 80, NL)\` → écrit le buffer en lignes de 80 chars\n- \`flush(ENTRY)\` → sauvegarde un enregistrement \`new()\` (si \`autoflush off\`)\n\n\`\`\`rte\nFILL_CHAR := " "\nput(1, 1, "CODE")\nput(1, 10, tCode)\nflush(0, 80, NL) >> tFichierSortie\n\`\`\``
+  },
+  put: {
+    label: 'put([taBuffer,] nLigne, nColonne, valeur)',
+    doc: `**Écrit dans un buffer positionnel** à une ligne et colonne données.\n\nLes zones non définies sont remplies avec \`FILL_CHAR\` (à initialiser avant le premier \`put()\`).\nVider le buffer avec \`flush()\` après construction.\n\n\`\`\`rte\nFILL_CHAR := " "\nput(1, 1, "FACTURE")\nput(1, 20, tNumFact)\nput(2, 1, "DATE")\nput(2, 20, tDate)\nflush(0, 80, NL) >> tFichierSortie\n\`\`\``
+  },
+  edierrorlist: {
+    label: 'edierrorlist(MESSAGE | SEGMENT)',
+    doc: `**Génère la liste des erreurs EDI** d'un message ou segment et l'écrit dans le journal.\n\nÀ utiliser pour les messages entrants avec des segments invalides.\n\n\`\`\`rte\nif valid(SEGMENT) then\n    edierrorlist(SEGMENT)\nendif\n\`\`\``
+  },
+
+  sendGisEmissionMessage: {
+    label: 'sendGisEmissionMessage(uuid) — émission GIS',
+    doc: `**Envoie un message d'émission GIS** — Déclenche l'émission d'un document vers le réseau Generix GIS.\n\nUtilisé dans les RTE de traitement sortant pour soumettre un document au broker GIS.\n\n\`\`\`rte\nsendGisEmissionMessage(pDOC.UUID)\n\`\`\``
+  },
+
+  sendKsefInvoiceMessage: {
+    label: 'sendKsefInvoiceMessage(uuid) — soumission KSeF',
+    doc: `**Soumet une facture au système KSeF** (Krajowy System e-Faktur, Pologne).\n\nUtilisé pour les factures électroniques polonaises B2B. Retourne le numéro KSeF dans \`pMESSAGE.BROKER.KSEF_NUMBER\`.\n\n\`\`\`rte\nsendKsefInvoiceMessage(pDOC.UUID)\nLOG("KSeF number", pMESSAGE.BROKER.KSEF_NUMBER)\n\`\`\``
+  },
+
+  'db.integrity.find': {
+    label: 'db.integrity.find(requête) → résultat',
+    doc: `**Requête sur la base d'intégrité Generix** — Interroge la base de données d'intégrité documentaire pour vérifier ou retrouver des informations sur un document traité.\n\n\`\`\`rte\ntResult := db.integrity.find(tQuery)\nif valid(tResult) then\n    LOG("Document trouvé", tResult)\nendif\n\`\`\``
+  },
+
+  'db.xxx.find': {
+    label: 'db.<collection>.find("filtre JSON") → qCursor',
+    doc: `**Requête MongoDB sur une collection standard** — Retourne un curseur \`qCursor\` contenant les enregistrements correspondants.\n\nLe filtre est un JSON MongoDB (opérateurs : \`$in\`, \`$lt\`, \`$gt\`, etc.).\nItérer avec \`while valid(qCursor) do\` + \`next(qCursor)\`.\n\n\`\`\`rte\nqResult := db.invoices.find("{'_ref':'0123456789'}")\nwhile valid(qResult) do\n    tVal := read(qResult)\n    next(qResult)\nendwhile\n\`\`\``
+  },
+
+  'db.xxx.count': {
+    label: 'db.<collection>.count("filtre JSON") → numérique',
+    doc: `**Compte les enregistrements MongoDB** d'une collection correspondant au filtre.\n\n\`\`\`rte\nnNb := db.invoices.count("{'_status':'SENT'}")\nLOG("Factures envoyées", nNb)\n\`\`\``
+  },
+
+  'db.xxx.aggregate': {
+    label: 'db.<collection>.aggregate("pipeline") → qCursor',
+    doc: `**Agrégation MongoDB** — Exécute un pipeline d'agrégation sur une collection standard.\n\nÉtapes supportées : \`$match\`, \`$group\`, \`$project\`, \`$sort\`, \`$limit\`, \`$skip\`, \`$unwind\`.\n\n\`\`\`rte\ntMatch := "{$match: {_status: 'SENT'}}"\ntGroup := "{$group: {_id: '$orderID', total: { $sum: '$amount'}}}"\ntSort  := "{$sort: {total: -1}}"\nqResult := db.orders.aggregate("[" + tMatch + "," + tGroup + "," + tSort + "]")\n\`\`\``
+  },
 
   // ── Fonctions bibliothèque Generix ─────────────────────────────────────────
 
@@ -376,6 +450,10 @@ const PDOC_PARAMS = {
   'pMESSAGE.BROKER.FORMAT':      '**Format du message** dans le broker Generix.',
   'pMESSAGE.BROKER.DOCTYPE':     '**Type de document** dans le broker Generix.',
   'pMESSAGE.BROKER.KSEF_NUMBER': '**Numéro KSeF** — identifiant officiel de la facture électronique polonaise.',
+  'pREST_TRIGGER.METHOD':        '**Méthode HTTP** du déclencheur REST (`GET`, `POST`, `PUT`…).',
+  'pREST_TRIGGER.BODY':          '**Corps de la requête REST** ayant déclenché ce RTE (payload JSON/XML brut).',
+  'pREST_TRIGGER.HEADERS':       '**En-têtes HTTP** de la requête REST déclencheuse.',
+  'pREST_TRIGGER.PARAMS':        '**Paramètres query-string** de la requête REST déclencheuse.',
 };
 
 module.exports = { HOVER_DATA, PDOC_PARAMS };

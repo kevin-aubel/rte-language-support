@@ -159,6 +159,18 @@ function provideHover(document, position) {
     return buildHover(`\`${entry.label}\``, entry.doc);
   }
 
+  // ── 3b. Requêtes MongoDB db.<collection>.find/count/aggregate ─────────────
+  {
+    const m = word.match(/^db\.(\w+)\.(find|count|aggregate)$/);
+    if (m) {
+      const key = `db.xxx.${m[2]}`;
+      if (HOVER_DATA[key]) {
+        const entry = HOVER_DATA[key];
+        return buildHover(`\`${entry.label}\``, entry.doc);
+      }
+    }
+  }
+
   // ── 4. Préfixes de variables / fonctions utilisateur ──────────────────────
   const prefixHover = getVariablePrefixHover(word);
   if (prefixHover) {
